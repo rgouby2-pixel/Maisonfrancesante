@@ -1,17 +1,13 @@
 import streamlit as st
 
-# 1. INITIALISATION DE SÉCURITÉ (Doit être au tout début)
-if 'page' not in st.session_state:
-    st.session_state.page = "home"
-if 'motif' not in st.session_state:
-    st.session_state.motif = None
-if 'res' not in st.session_state:
-    st.session_state.res = None
+# 1. INITIALISATION
+if 'page' not in st.session_state: st.session_state.page = "home"
+if 'motif' not in st.session_state: st.session_state.motif = None
+if 'res' not in st.session_state: st.session_state.res = None
 
-# 2. Configuration
-st.set_page_config(page_title="Maison France Santé - Expert", page_icon="🇫🇷")
+st.set_page_config(page_title="Maison France Santé - Régulation", page_icon="🇫🇷")
 
-# 3. Style CSS
+# 2. STYLE
 st.markdown("""
     <style>
     .stButton>button { width: 100%; border-radius: 12px; height: 3.5em; background-color: #0055a4; color: white; font-weight: bold; }
@@ -19,65 +15,58 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 4. Fonctions Logiques de Triage
-def logic_standard(q): return "🚨 URGENCE (15)" if any(q) else "👨‍⚕️ MEDECIN (Consultation)"
-def logic_traumato(q): return "🚨 URGENCE TRAUMATO (Radio/15)" if any(q) else "🏥 PHARMACIE (Protocole RICE)"
-def logic_abdo(q):
-    if q[0] or q[1] or q[4]: return "🚨 URGENCE CHIRURGICALE (15)"
-    elif q[2] or q[3]: return "👨‍⚕️ MEDECIN (Risque déshydratation)"
-    return "🏥 PHARMACIE (Conseil Digestif)"
-
-# 5. MATRICE MÉDICALE (10 PATHOLOGIES)
-DATA_SERIEUX = {
+# 3. MATRICE MÉDICALE HAUTE PRÉCISION
+# Structure : [Symptômes VITAUX, Symptômes SÉRIEUX, Symptômes BÉNINS]
+DATA_PRO = {
     "Traumatologie (Choc, Chute)": {
-        "q": ["Membre déformé ?", "Impossible de faire 4 pas ?", "Douleur osseuse précise ?", "Membre bleu/froid ?"],
-        "logic": logic_traumato
+        "q": ["Membre déformé / Os visible ?", "Impossible de poser le pied / 4 pas ?", "Simple douleur ou bleu après un choc ?"],
+        "logic": lambda q: "🚨 URGENCE TRAUMATO (15)" if q[0] else ("👨‍⚕️ MEDECIN (Radio requise)" if q[1] else "🏥 PHARMACIE (Glace / Repos)")
     },
     "Abdominale (Ventre)": {
-        "q": ["Douleur brutale ?", "Ventre dur ?", "Vomissements répétés ?", "Diarrhée avec sang ?", "Arrêt des gaz/selles ?"],
-        "logic": logic_abdo
-    },
-    "Infection Urinaire": {
-        "q": ["Fièvre/Frissons ?", "Douleur au dos/reins ?", "Sang dans les urines ?", "Brûlures simples ?"],
-        "logic": lambda q: "🚨 URGENCE (Reins)" if q[0] or q[1] or q[2] else "🏥 PHARMACIE (Cystite)"
+        "q": ["Ventre dur / Sang dans les selles ?", "Vomissements ou Diarrhée persistante ?", "Ballonnements / Digestion difficile ?"],
+        "logic": lambda q: "🚨 URGENCE CHIRURGICALE (15)" if q[0] else ("👨‍⚕️ MEDECIN (Risque déshydratation)" if q[1] else "🏥 PHARMACIE (Conseil Digestif)")
     },
     "ORL & Respiratoire": {
-        "q": ["Mal à respirer ?", "Sifflement ?", "Fièvre + Absence de toux ?", "Salive impossible à avaler ?"],
-        "logic": lambda q: "🚨 URGENCE (15)" if q[0] or q[1] or q[3] else ("🏥 PHARMACIE (Test TROD)" if q[2] else "💊 PHARMACIE")
+        "q": ["Difficulté à respirer / Sifflement ?", "Fièvre élevée + Gorge très douloureuse ?", "Nez qui coule / Toux simple ?"],
+        "logic": lambda q: "🚨 URGENCE RESPIRATOIRE (15)" if q[0] else ("🏥 PHARMACIE (Test TROD Angine)" if q[1] else "💊 PHARMACIE (Symptomatique)")
+    },
+    "Infection Urinaire": {
+        "q": ["Fièvre / Douleur dans le dos ?", "Sang dans les urines ?", "Envie fréquente / Brûlure simple ?"],
+        "logic": lambda q: "🚨 URGENCE (Reins/15)" if q[0] else ("👨‍⚕️ MEDECIN (Analyse d'urine)" if q[1] else "🏥 PHARMACIE (Protocole Cystite)")
     },
     "Neurologie & Dos": {
-        "q": ["Perte de force/sensibilité ?", "Incontinence soudaine ?", "Maux de tête foudroyants ?", "Chute sur le dos ?"],
-        "logic": lambda q: "🚨 URGENCE NEURO" if any(q) else "👨‍⚕️ MEDECIN / KINÉ"
+        "q": ["Paralysie / Confusion / Incontinence ?", "Douleur dos suite à un choc ?", "Lumbago / Mal de dos habituel ?"],
+        "logic": lambda q: "🚨 URGENCE NEURO (15)" if q[0] else ("👨‍⚕️ MEDECIN (Examen clinique)" if q[1] else "🏥 PHARMACIE (Antidouleur / Kiné)")
     },
     "Ophtalmologie (Œil)": {
-        "q": ["Baisse de vision ?", "Douleur vive ?", "Choc direct ?", "Œil rouge et collé ?"],
-        "logic": lambda q: "🚨 URGENCE OPHTALMO" if q[0] or q[1] or q[2] else "🏥 PHARMACIE (Lavage)"
+        "q": ["Baisse de vision / Douleur vive ?", "Corps étranger dans l'œil ?", "Œil rouge / Démangeaisons ?"],
+        "logic": lambda q: "🚨 URGENCE OPHTALMO (15)" if q[0] else ("👨‍⚕️ MEDECIN (Contrôle)" if q[1] else "🏥 PHARMACIE (Lavage / Collyre)")
     },
     "Dentaire": {
-        "q": ["Joue gonflée ?", "Fièvre ?", "Difficulté à ouvrir la bouche ?", "Douleur persistante ?"],
-        "logic": lambda q: "🚨 URGENCE DENTAIRE" if q[0] or q[1] or q[2] else "🦷 DENTISTE"
+        "q": ["Gonflement visage / Fièvre ?", "Dent cassée / Expulsée ?", "Sensibilité au chaud/froid ?"],
+        "logic": lambda q: "🚨 URGENCE DENTAIRE" if q[0] else ("🦷 DENTISTE (RDV rapide)" if q[1] else "🏥 PHARMACIE (Gel gingival)")
     },
     "Dermatologie (Peau)": {
-        "q": ["Fièvre + Éruption ?", "Taches rouges (purpura) ?", "Démangeaisons intenses ?"],
-        "logic": lambda q: "🚨 URGENCE DERMATO" if q[0] or q[1] else "🏥 PHARMACIE (Conseil)"
+        "q": ["Taches rouges qui ne s'effacent pas ?", "Éruption avec fièvre ?", "Boutons / Rougeurs sans fièvre ?"],
+        "logic": lambda q: "🚨 URGENCE DERMATO (15)" if q[0] or q[1] else "🏥 PHARMACIE (Conseil Dermato)"
     },
     "Pédiatrie (Enfant)": {
-        "q": ["Enfant mou/prostré ?", "Refuse de boire ?", "Fièvre > 39°C ?", "Taches sur la peau ?"],
-        "logic": lambda q: "🚨 URGENCE PÉDIATRIQUE" if any(q) else "👨‍⚕️ PÉDIATRE"
+        "q": ["Enfant mou / Refuse de boire ?", "Fièvre > 39°C ?", "Rhume / Poussée dentaire ?"],
+        "logic": lambda q: "🚨 URGENCE PÉDIATRIQUE (15)" if q[0] else ("👨‍⚕️ PÉDIATRE (Sous 24h)" if q[1] else "🏥 PHARMACIE (Conseil maman)")
     },
     "Santé Mentale": {
-        "q": ["Idées noires/Mise en danger ?", "Crise d'angoisse ?", "Insomnie totale ?"],
-        "logic": lambda q: "📞 APPEL 3114 (Urgence)" if q[0] else "👨‍⚕️ CONSULTATION"
+        "q": ["Idées noires / Mise en danger ?", "Anxiété empêchant de dormir ?", "Stress passager / Fatigue ?"],
+        "logic": lambda q: "📞 APPEL 3114 (Urgence Psy)" if q[0] else ("👨‍⚕️ MEDECIN / PSY" if q[1] else "🏥 PHARMACIE (Phytothérapie)")
     }
 }
 
+# 4. INTERFACE
 st.title("🇫🇷 La Maison France Santé")
-st.caption("Système Expert d'Aiguillage National")
+st.caption("Aiguillage Intelligent - Redonner du temps médical aux Français")
 
-# NAVIGATION
 if st.session_state.page == "home":
     st.write("### 1. Quel est votre motif ?")
-    choix = st.selectbox("Choisir...", ["Choisir..."] + list(DATA_SERIEUX.keys()))
+    choix = st.selectbox("Choisir...", ["Choisir..."] + list(DATA_PRO.keys()))
     if st.button("Continuer"):
         if choix != "Choisir...":
             st.session_state.motif = choix
@@ -85,25 +74,29 @@ if st.session_state.page == "home":
             st.rerun()
 
 elif st.session_state.page == "quiz":
-    st.write(f"### 2. Analyse : {st.session_state.motif}")
-    qs = DATA_SERIEUX[st.session_state.motif]["q"]
+    st.write(f"### 2. Analyse précise : {st.session_state.motif}")
+    qs = DATA_PRO[st.session_state.motif]["q"]
     reps = [st.checkbox(q, key=f"c_{i}") for i, q in enumerate(qs)]
     
-    if st.button("Calculer"):
-        st.session_state.res = DATA_SERIEUX[st.session_state.motif]["logic"](reps)
+    if st.button("Calculer l'orientation"):
+        st.session_state.res = DATA_PRO[st.session_state.motif]["logic"](reps)
         st.session_state.page = "fin"
         st.rerun()
 
 elif st.session_state.page == "fin":
-    st.write("### 3. Orientation")
+    st.write("### 3. Votre Parcours de Soins")
     st.markdown(f"<div class='report-box'><h2>{st.session_state.res}</h2></div>", unsafe_allow_html=True)
     
-    if "🚨" in st.session_state.res or "3114" in st.session_state.res:
-        st.error("DANGER : Contactez le 15 immédiatement.")
+    if "🚨" in st.session_state.res:
+        st.error("Contactez immédiatement les secours.")
+        st.button("📞 APPELER LE 15")
     elif "PHARMACIE" in st.session_state.res:
-        st.success("Orientation : Circuit Court (Officine)")
+        st.success("Orientation : Circuit Court Officinal. Gain de temps immédiat.")
         st.link_button("📍 Trouver une pharmacie", "https://www.google.com/maps/search/pharmacie")
+    else:
+        st.info("Une consultation médicale est recommandée.")
+        st.link_button("📅 RDV Doctolib", "https://www.doctolib.fr")
     
-    if st.button("Nouvelle analyse"):
+    if st.button("🔄 Nouvelle analyse"):
         st.session_state.page = "home"
         st.rerun()
