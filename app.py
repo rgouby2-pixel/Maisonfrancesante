@@ -12,7 +12,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 3. Base de Données Médicale Protocolée
+# 3. Fonctions Logiques (Séparées pour la clarté)
 def logic_traumato(q):
     return "🚨 URGENCE TRAUMATO (Radio/15)" if any(q) else "🏥 PHARMACIE (Protocole RICE: Repos, Glace, Compression)"
 
@@ -97,17 +97,57 @@ if 'res' not in st.session_state:
 st.title("🇫🇷 La Maison France Santé")
 st.caption("Aiguillage Médical Protocolé - Système Expert")
 
-# ÉCRAN 1 : ACCUEIL
+# --- ÉCRAN 1 : ACCUEIL ---
 if st.session_state.page == "home":
     st.write("### 1. Quel est votre motif de consultation ?")
     choix = st.selectbox("Sélectionnez une catégorie", ["Choisir..."] + list(DATA_SERIEUX.keys()))
     
-    if st.button("Continuer", key="btn_continuer"):
+    if st.button("Continuer", key="btn_home"):
         if choix != "Choisir...":
             st.session_state.motif = choix
             st.session_state.page = "quiz"
             st.rerun()
         else:
-            st.warning("Veuillez sélectionner une catégorie avant de continuer.")
-    if choix != "Choisir...":
-        if st.button("Continuer", key="btn_continuer"):
+            st.warning("Veuillez sélectionner une catégorie.")
+
+# --- ÉCRAN 2 : QUIZ ---
+elif st.session_state.page == "quiz":
+    st.write(f"### 2. Analyse : {st.session_state.motif}")
+    questions = DATA_SERIEUX[st.session_state.motif]["q"]
+    
+    reponses = []
+    for i, q in enumerate(questions):
+        reponses.append(st.checkbox(q, key=f"check_{i}"))
+    
+    if st.button("Calculer l'orientation"):
+        # On passe la liste de booléens à la fonction logique correspondante
+        resultat = DATA_SERIEUX[st.session_state.motif]["logic"](reponses)
+        st.session_state.res = resultat
+        st.session_state.page = "fin"
+        st.rerun()
+    
+    if st.button("Retour"):
+        st.session_state.page = "home"
+        st.rerun()
+
+# --- ÉCRAN 3 : RÉSULTAT ---
+elif st.session_state.page == "fin":
+    st.write("### 3. Résultat & Orientation")
+    st.markdown(f"<div class='report-box'><h2>{st.session_state.res}</h2></div>", unsafe_allow_html=True)
+    
+    if "🚨" in st.session_state.res:
+        st.error("DANGER : Contactez immédiatement le 15.")
+        st.button("📞 APPELER LE 15")
+    elif "🏥 PHARMACIE" in st.session_state.res:
+        st.success("Orientation : Circuit Court (Officine)")
+        st.info("💡 Économie Sécu : 26,50 €")
+        st.link_button("📍 Trouver une pharmacie", "https://www.google.com/maps/search/pharmacie")
+    else:
+        st.info("Une consultation est recommandée.")
+        st.link_button("📅 Prendre RDV Doctolib", "https://www.doctolib.fr")
+    
+    if st.button("Nouvelle analyse"):
+        st.session_state.page = "home"
+        st.session_state.motif = None
+        st.session_state.res = None
+        st.rerun()
