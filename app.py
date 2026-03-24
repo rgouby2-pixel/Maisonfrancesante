@@ -101,6 +101,13 @@ st.caption("Aiguillage Médical Protocolé - Système Expert")
 if st.session_state.page == "home":
     st.write("### 1. Quel est votre motif de consultation ?")
     choix = st.selectbox("Sélectionnez une catégorie", ["Choisir..."] + list(DATA_SERIEUX.keys()))
-
+    
+    if st.button("Continuer", key="btn_continuer"):
+        if choix != "Choisir...":
+            st.session_state.motif = choix
+            st.session_state.page = "quiz"
+            st.rerun()
+        else:
+            st.warning("Veuillez sélectionner une catégorie avant de continuer.")
     if choix != "Choisir...":
         if st.button("Continuer", key="btn_continuer"):
