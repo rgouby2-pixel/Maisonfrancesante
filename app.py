@@ -1,69 +1,99 @@
 import streamlit as st
 
-# Configuration de la page pour mobile
-st.set_page_config(page_title="La Maison France Santé", page_icon="🇫🇷")
+# Configuration de l'affichage mobile
+st.set_page_config(page_title="La Maison France Santé", page_icon="🇫🇷", layout="centered")
 
-# Style CSS pour que ça ressemble à une vraie App iOS
+# Design aux couleurs de "La Maison France" (Bleu, Blanc, Rouge / Institutionnel)
 st.markdown("""
     <style>
-    .main { background-color: #f5f7f9; }
-    .stButton>button { width: 100%; border-radius: 10px; height: 3em; font-weight: bold; }
-    .emergency { background-color: #ff4b4b; color: white; }
+    .stButton>button { width: 100%; border-radius: 15px; height: 3.8em; font-weight: bold; font-size: 1.1em; transition: 0.3s; }
+    .stButton>button:hover { transform: scale(1.02); border: 2px solid #0055a4; }
+    div[data-testid="stMetricValue"] { color: #0055a4; }
+    .main { background-color: #f0f2f6; }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🇫🇷 La Maison France Santé")
-st.subheader("Votre assistant d'orientation médicale")
+# --- BASE DE DONNÉES MÉDICALE ENRICHIE ---
+SITUATIONS = {
+    "Mal de gorge / Toux": {
+        "questions": ["Fièvre > 38.5°C ?", "Difficulté à avaler / respirer ?", "Ganglions gonflés dans le cou ?", "Absence de toux ?"],
+        "aide": "Une angine bactérienne peut souvent être traitée directement via un test en pharmacie.",
+        "logic": lambda q: "URGENCE" if q[1] else ("PHARMACIE (Test TROD)" if q[0] and q[3] else "MEDECIN (Auscultation)")
+    },
+    "Douleur Abdominale": {
+        "questions": ["Douleur vive en bas à droite ?", "Ventre dur ou contracté ?", "Fièvre ou vomissements ?", "Douleur apparue brutalement ?"],
+        "aide": "Attention aux signes d'appendicite ou d'occlusion.",
+        "logic": lambda q: "URGENCE" if q[0] or q[1] or q[3] else "MEDECIN (Consultation digestive)"
+    },
+    "Infection Urinaire": {
+        "questions": ["Brûlures persistantes ?", "Douleur dans le bas du dos (reins) ?", "Sang dans les urines ?", "Fièvre associée ?"],
+        "aide": "Les pharmaciens peuvent désormais délivrer des antibiotiques pour les cystites simples sous protocole.",
+        "logic": lambda q: "URGENCE" if q[1] or q[2] or q[3] else "PHARMACIE (Protocole Cystite)"
+    },
+    "Douleur Dos / Membres": {
+        "questions": ["Suite à un choc violent ?", "Fourmillements / Perte de force ?", "Douleur qui bloque la marche ?", "Douleur qui réveille la nuit ?"],
+        "aide": "Le triage permet de distinguer le lumbago simple de la hernie discale grave.",
+        "logic": lambda q: "MEDECIN (Imagerie requise)" if q[0] or q[1] or q[3] else "PHARMACIE (Conseil Antalgique)"
+    }
+}
 
-# Initialisation du questionnaire
+# --- LOGIQUE DE L'APPLICATION ---
 if 'step' not in st.session_state:
-    st.session_state.step = 1
-    st.session_state.symptomes = []
+    st.session_state.step = "accueil"
 
-# ÉTAPE 1 : Choix du symptôme principal
-if st.session_state.step == 1:
-    st.write("### Quel est votre symptôme principal ?")
-    option = st.selectbox("Sélectionnez...", ["Choisir", "Mal de gorge", "Douleur abdominale", "Difficulté à respirer"])
+# ÉCRAN 1 : ACCUEIL & MOTIF
+if st.session_state.step == "accueil":
+    st.title("🇫🇷 La Maison France Santé")
+    st.write("### Quel est le motif de votre analyse ?")
     
-    if option != "Choisir":
-        if option == "Difficulté à respirer":
-            st.error("⚠️ URGENCE : Appelez immédiatement le 15.")
-            st.button("📞 APPELER LE 15", on_click=None)
-        else:
-            st.session_state.symptome_principal = option
-            st.session_state.step = 2
-            st.rerun()
-
-# ÉTAPE 2 : Questions dynamiques
-elif st.session_state.step == 2:
-    st.write(f"### Analyse : {st.session_state.symptome_principal}")
-    fievre = st.radio("Avez-vous de la fièvre (>38°C) ?", ["Non", "Oui"])
-    duree = st.slider("Depuis combien de jours ?", 1, 10, 1)
-
-    if st.button("Valider l'analyse"):
-        st.session_state.fievre = fievre
-        st.session_state.duree = duree
-        st.session_state.step = 3
+    choix = st.selectbox("Sélectionnez la zone concernée", ["Choisir..."] + list(SITUATIONS.keys()) + ["Autre / Urgence vitale"])
+    
+    if choix == "Autre / Urgence vitale":
+        st.error("🚨 SI VOUS AVEZ UNE DOULEUR THORACIQUE OU DU MAL À RESPIRER :")
+        st.button("📞 APPELER LE 15 IMMÉDIATEMENT", type="primary")
+    elif choix != "Choisir...":
+        st.session_state.motif = choix
+        st.session_state.step = "questions"
         st.rerun()
 
-# ÉTAPE 3 : Résultat et Boutons Business
-elif st.session_state.step == 3:
-    st.success("✅ Analyse terminée")
+# ÉCRAN 2 : QUESTIONNAIRE ADAPTATIF
+elif st.session_state.step == "questions":
+    st.title(f"Analyse : {st.session_state.motif}")
+    st.info(SITUATIONS[st.session_state.motif]["aide"])
     
-    if st.session_state.symptome_principal == "Mal de gorge" and st.session_state.fievre == "Oui":
-        st.warning("🩺 **Diagnostic probable : Angine**")
-        st.write("Le protocole HAS recommande un test en pharmacie.")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.link_button("🏥 Trouver une Pharmacie", "https://www.google.com/maps/search/pharmacie")
-        with col2:
-            st.link_button("👨‍⚕️ RDV Doctolib", "https://www.doctolib.fr")
-            
-    else:
-        st.write("### Orientation : Médecine Générale")
-        st.link_button("📅 Prendre RDV (Doctolib)", "https://www.doctolib.fr")
+    questions = SITUATIONS[st.session_state.motif]["questions"]
+    reponses = []
+    
+    st.write("#### Cochez les cases correspondantes :")
+    for i, q in enumerate(questions):
+        reponses.append(st.checkbox(q, key=f"q_{i}"))
+    
+    if st.button("OBTENIR L'ORIENTATION"):
+        st.session_state.resultat = SITUATIONS[st.session_state.motif]["logic"](reponses)
+        st.session_state.step = "resultat"
+        st.rerun()
 
-    if st.button("Recommencer"):
-        st.session_state.step = 1
+# ÉCRAN 3 : RÉSULTAT & BOUTONS BUSINESS
+elif st.session_state.step == "resultat":
+    res = st.session_state.resultat
+    st.title("Résultat de l'analyse")
+    
+    if "URGENCE" in res:
+        st.error(f"⚠️ {res}")
+        st.write("Votre situation nécessite une prise en charge hospitalière immédiate.")
+        st.button("📞 APPELER LE 15", type="primary")
+    
+    elif "PHARMACIE" in res:
+        st.success(f"🏥 ORIENTATION : {res}")
+        st.metric("Économie estimée pour la Sécu", "26,50 €")
+        st.write("Le pharmacien peut traiter votre cas directement sans passer par un médecin.")
+        st.link_button("📍 Trouver la pharmacie la plus proche", "https://www.google.com/maps/search/pharmacie")
+    
+    else:
+        st.info(f"👨‍⚕️ ORIENTATION : {res}")
+        st.write("Une consultation médicale est recommandée sous 48h.")
+        st.link_button("📅 Prendre RDV sur Doctolib", "https://www.doctolib.fr")
+
+    if st.button("🔄 Nouvelle analyse"):
+        st.session_state.step = "accueil"
         st.rerun()
