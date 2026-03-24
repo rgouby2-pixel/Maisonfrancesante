@@ -37,66 +37,48 @@ def logic_neuro(q):
     return "🚨 URGENCE NEURO (Risque AVC/Moelle)" if any(q) else "👨‍⚕️ MEDECIN / KINÉ"
 
 DATA_SERIEUX = {
-    "Traumatologie (Chute, Choc, Entorse)": {
-        "q": [
-            "Déformation visible ou membre en position anormale ?",
-            "Impossibilité totale de poser le pied ou de faire 4 pas ?",
-            "Douleur osseuse très précise au toucher (cheville/poignet) ?",
-            "Membre froid, bleu ou perte de sensibilité ?",
-            "Le choc a eu lieu à la tête avec perte de connaissance ?"
-        ],
+    "Traumatologie (Choc, Chute)": {
+        "q": ["Membre déformé ?", "Impossible de faire 4 pas ?", "Douleur osseuse précise ?", "Membre bleu/froid ?"],
         "logic": logic_traumato
     },
-    "Abdominale & Digestif": {
-        "q": [
-            "Douleur brutale (type coup de poignard) ?",
-            "Ventre dur/tendu (impossible à enfoncer) ?",
-            "Vomissements répétés (impossible de boire) ?",
-            "Diarrhée avec sang ou glaires ?",
-            "Arrêt total des gaz et des selles (occlusion) ?"
-        ],
+    "Abdominale (Ventre)": {
+        "q": ["Douleur brutale ?", "Ventre dur ?", "Vomissements répétés ?", "Sang dans les selles ?", "Arrêt des gaz/selles ?"],
         "logic": logic_abdo
     },
     "Infection Urinaire": {
-        "q": [
-            "Fièvre > 38.5°C ou Frissons ?",
-            "Douleur aiguë dans le dos ou sur le côté (reins) ?",
-            "Présence de sang visible dans les urines ?",
-            "Brûlures lors de la miction sans autres signes ?"
-        ],
+        "q": ["Fièvre/Frissons ?", "Douleur au dos/reins ?", "Sang dans les urines ?", "Brûlures simples ?"],
         "logic": logic_urinaire
     },
     "ORL & Respiratoire": {
-        "q": [
-            "Difficulté réelle à respirer ou à parler ?",
-            "Bruit siffleur à l'inspiration ?",
-            "Fièvre élevée associée à une absence de toux ?",
-            "Difficulté à avaler sa propre salive ?"
-        ],
+        "q": ["Mal à respirer ?", "Sifflement ?", "Fièvre + Absence de toux ?", "Salive impossible à avaler ?"],
         "logic": logic_orl
     },
     "Neurologie & Dos": {
-        "q": [
-            "Perte de force ou de sensibilité dans un membre ?",
-            "Incontinence soudaine (urinaire ou fécale) ?",
-            "Céphalée brutale et inhabituelle (la pire de votre vie) ?",
-            "Douleur dos suite à une chute importante ?"
-        ],
+        "q": ["Perte de force/sensibilité ?", "Incontinence soudaine ?", "Maux de tête foudroyants ?", "Chute sur le dos ?"],
         "logic": logic_neuro
+    },
+    # --- NOUVEAUX MOTIFS AJOUTÉS ---
+    "Ophtalmologie (Œil)": {
+        "q": ["Baisse brutale de vision ?", "Douleur oculaire vive ?", "Choc direct sur l'œil ?", "Œil rouge et collé ?"],
+        "logic": lambda q: "🚨 URGENCE OPHTALMO" if q[0] or q[1] or q[2] else "🏥 PHARMACIE (Nettoyage/Collyre)"
+    },
+    "Dentaire": {
+        "q": ["Joue gonflée ?", "Fièvre ?", "Difficulté à ouvrir la bouche ?", "Douleur persistante ?"],
+        "logic": lambda q: "🚨 URGENCE DENTAIRE (Garde)" if q[0] or q[1] or q[2] else "🦷 DENTISTE (RDV Classique)"
+    },
+    "Dermatologie (Peau)": {
+        "q": ["Fièvre + Éruption ?", "Taches rouges persistantes (purpura) ?", "Démangeaisons intenses ?", "Brûlure étendue ?"],
+        "logic": lambda q: "🚨 URGENCE DERMATO" if q[0] or q[1] else "🏥 PHARMACIE (Conseil/Crème)"
+    },
+    "Pédiatrie (Enfant)": {
+        "q": ["Enfant mou/prostré ?", "Refuse de boire ?", "Fièvre > 39°C persistante ?", "Cris inconsolables ?"],
+        "logic": lambda q: "🚨 URGENCE PÉDIATRIQUE" if q[0] or q[1] or q[2] else "👨‍⚕️ PÉDIATRE (Sous 24h)"
+    },
+    "Santé Mentale": {
+        "q": ["Idées noires/Mise en danger ?", "Crise d'angoisse aiguë ?", "Insomnie totale (48h+) ?"],
+        "logic": lambda q: "📞 APPEL 3114 (Urgence Psy)" if q[0] else "👨‍⚕️ CONSULTATION (CMP/Psy)"
     }
 }
-
-# 4. Initialisation sécurisée du session_state
-if 'page' not in st.session_state:
-    st.session_state.page = "home"
-if 'motif' not in st.session_state:
-    st.session_state.motif = None
-if 'res' not in st.session_state:
-    st.session_state.res = None
-
-st.title("🇫🇷 La Maison France Santé")
-st.caption("Aiguillage Médical Protocolé - Système Expert")
-
 # --- ÉCRAN 1 : ACCUEIL ---
 if st.session_state.page == "home":
     st.write("### 1. Quel est votre motif de consultation ?")
