@@ -1,82 +1,96 @@
 import streamlit as st
 
-st.set_page_config(page_title="La Maison France Santé - Expert", page_icon="🇫🇷", layout="centered")
+# 1. Configuration et Style
+st.set_page_config(page_title="La Maison France Santé", page_icon="🇫🇷")
 
-# --- STYLE ---
 st.markdown("""
     <style>
     .stButton>button { width: 100%; border-radius: 12px; height: 3.5em; background-color: #0055a4; color: white; font-weight: bold; }
-    .main { background-color: #f8fafc; }
-    .report-box { padding: 20px; border-radius: 10px; border: 1px solid #ddd; background-color: white; margin-bottom: 20px; }
+    .report-box { padding: 15px; border-radius: 10px; border: 1px solid #0055a4; background-color: #f0f4f8; margin-bottom: 20px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- BASE DE DONNÉES MÉDICALE INTÉGRALE ---
-DATA_COMPLET = {
+# 2. Base de Données Médicale (Vérifiée sans erreurs de syntaxe)
+DATA = {
     "Cardio / Respiratoire": {
-        "questions": ["Douleur/Oppression dans la poitrine ?", "Essoufflement brutal au repos ?", "Douleur irradiant mâchoire ou bras gauche ?"],
-        "logic": lambda q: "🚨 URGENCE VITALE (15)" if any(q) else "👨‍⚕️ MEDECIN (Bilan cardiaque)"
+        "q": ["Douleur/Oppression poitrine ?", "Essoufflement brutal ?", "Douleur bras ou mâchoire ?"],
+        "logic": lambda q: "🚨 URGENCE VITALE (15)" if any(q) else "👨‍⚕️ MEDECIN (Bilan)"
     },
     "Mal de gorge / Toux": {
-        "questions": ["Fièvre > 38.5°C ?", "Difficulté à avaler / respirer ?", "Absence totale de toux ?", "Ganglions gonflés ?"],
-        "logic": lambda q: "🚨 URGENCE (Risque respiratoire)" if q[1] else ("🏥 PHARMACIE (Test TROD Angine)" if q[0] and q[2] else "💊 PHARMACIE (Conseil/Sirop)")
+        "q": ["Fièvre > 38.5°C ?", "Difficulté à respirer ?", "Absence de toux ?", "Ganglions gonflés ?"],
+        "logic": lambda q: "🚨 URGENCE (Respiratoire)" if q[1] else ("🏥 PHARMACIE (Test TROD)" if q[0] and q[2] else "💊 PHARMACIE (Conseil)")
     },
     "Douleur Abdominale": {
-        "questions": ["Douleur intense en bas à droite ?", "Ventre dur / contracté ?", "Impossibilité d'émettre des gaz / selles ?", "Sang dans les selles ?"],
+        "q": ["Douleur bas-droite ?", "Ventre dur ?", "Sang dans les selles ?", "Pas de gaz/selles ?"],
         "logic": lambda q: "🚨 URGENCE CHIRURGICALE" if any(q) else "👨‍⚕️ MEDECIN (Avis digestif)"
     },
     "Infection Urinaire": {
-        "questions": ["Douleur dans le bas du dos / Reins ?", "Fièvre ou frissons ?", "Sang dans les urines ?", "Brûlures persistantes ?"],
-        "logic": lambda q: "🚨 URGENCE (Risque Pyélonéphrite)" if q[0] or q[1] or q[2] else "🏥 PHARMACIE (Protocole Cystite)"
+        "q": ["Douleur bas du dos ?", "Fièvre / Frissons ?", "Sang dans les urines ?"],
+        "logic": lambda q: "🚨 URGENCE (Reins)" if any(q) else "🏥 PHARMACIE (Protocole Cystite)"
     },
     "Pédiatrie (Enfant)": {
-        "questions": ["Enfant geignant ou prostré ?", "Taches rouges ne s'effaçant pas à la pression ?", "Refuse de boire / Signes de déshydratation ?"],
-        "logic": lambda q: "🚨 URGENCE PÉDIATRIQUE" if any(q) else "👨‍⚕️ PÉDIATRE (Sous 24h)"
+        "q": ["Enfant prostré ?", "Taches rouges sur la peau ?", "Refuse de boire ?"],
+        "logic": lambda q: "🚨 URGENCE PÉDIATRIQUE" if any(q) else "👨‍⚕️ PÉDIATRE (24h)"
     },
     "Ophtalmologie (Œil)": {
-        "questions": ["Baisse brutale de la vision ?", "Douleur oculaire intense ?", "Choc ou corps étranger ?", "Œil rouge et collé le matin ?"],
-        "logic": lambda q: "🚨 URGENCE OPHTALMO" if q[0] or q[1] or q[2] else "🏥 PHARMACIE (Lavage/Antiseptique)"
+        "q": ["Baisse de vision ?", "Douleur intense ?", "Choc sur l'oeil ?", "Œil rouge/collé ?"],
+        "logic": lambda q: "🚨 URGENCE OPHTALMO" if q[0] or q[1] or q[2] else "🏥 PHARMACIE (Lavage)"
     },
     "Dermatologie (Peau)": {
-        "questions": ["Fièvre associée à l'éruption ?", "Boutons qui s'étendent très vite ?", "Démangeaisons insupportables ?"],
-        "logic": lambda q: "👨‍⚕️ MEDECIN (Diagnostic requis)" if q[0] or q[1] else "🏥 PHARMACIE (Crème apaisante)"
+        "q": ["Fièvre + Boutons ?", "Extension très rapide ?", "Démangeaisons intenses ?"],
+        "logic": lambda q: "👨‍⚕️ MEDECIN (Diagnostic)" if q[0] or q[1] else "🏥 PHARMACIE (Apaisement)"
     },
     "Dentaire": {
-        "questions": ["Gonflement de la joue ?", "Fièvre ?", "Difficulté à ouvrir la bouche ?"],
-        "logic": lambda q: "🚨 URGENCE (Dentiste de garde)" if any(q) else "🦷 DENTISTE (RDV classique)"
+        "q": ["Joue gonflée ?", "Fièvre ?", "Difficulté à ouvrir la bouche ?"],
+        "logic": lambda q: "🚨 URGENCE (Garde)" if any(q) else "🦷 DENTISTE (RDV)"
     },
     "Santé Mentale": {
-        "questions": ["Idées noires ou mise en danger ?", "Détresse psychologique profonde ?", "Insomnie totale depuis plusieurs jours ?"],
-        "logic": lambda q: "📞 APPEL 3114 (Prévention Suicide)" if q[0] else "👨‍⚕️ PSYCHOLOGUE / CMP"
+        "q": ["Idées noires ?", "Détresse profonde ?", "Insomnie totale ?"],
+        "logic": lambda q: "📞 APPEL 3114 (Suicide)" if q[0] else "👨‍⚕️ PSY / CMP"
     }
 }
 
-# --- APPLICATION LOGIC ---
+# 3. Logique de l'Interface
 if 'page' not in st.session_state: st.session_state.page = "home"
 
+st.title("🇫🇷 La Maison France Santé")
+
 if st.session_state.page == "home":
-    st.title("🇫🇷 La Maison France Santé")
-    st.write("### 1. Quel est votre motif ?")
-    choix = st.selectbox("Rechercher une pathologie...", ["Choisir..."] + list(DATA_COMPLET.keys()) + ["AUTRE URGENCE"])
+    st.write("### 1. Choisissez votre motif")
+    choix = st.selectbox("Rechercher...", ["Choisir..."] + list(DATA.keys()) + ["AUTRE URGENCE"])
     
     if choix == "AUTRE URGENCE":
-        st.error("🚨 APPEL IMMÉDIAT AU 15")
+        st.error("🚨 APPEL 15 IMMEDIAT")
     elif choix != "Choisir...":
         st.session_state.motif = choix
         st.session_state.page = "quiz"
         st.rerun()
 
 elif st.session_state.page == "quiz":
-    st.title(f"Analyse : {st.session_state.motif}")
-    qs = DATA_COMPLET[st.session_state.motif]["questions"]
-    reps = []
-    for i, q in enumerate(qs):
-        reps.append(st.checkbox(q, key=f"q_{i}"))
+    st.write(f"### 2. Analyse : {st.session_state.motif}")
+    qs = DATA[st.session_state.motif]["q"]
+    reps = [st.checkbox(q, key=f"q_{i}") for i, q in enumerate(qs)]
     
     if st.button("CALCULER L'ORIENTATION"):
-        st.session_state.res = DATA_COMPLET[st.session_state.motif]["logic"](reps)
+        st.session_state.res = DATA[st.session_state.motif]["logic"](reps)
         st.session_state.page = "fin"
         st.rerun()
 
 elif st.session_state.page == "fin":
-    res = st.session_state.res
+    st.write("### 3. Résultat & Orientation")
+    st.markdown(f"<div class='report-box'><h2>{st.session_state.res}</h2></div>", unsafe_allow_html=True)
+    
+    if "URGENCE" in st.session_state.res or "15" in st.session_state.res:
+        st.error("Ne prenez pas le volant. Appelez les secours.")
+        st.button("📞 APPELER LE 15")
+    elif "PHARMACIE" in st.session_state.res:
+        st.success("Circuit Court : Pharmacie")
+        st.info("💡 Économie Sécu : 26,50€")
+        st.link_button("📍 Trouver l'officine la plus proche", "https://www.google.com/maps/search/pharmacie")
+    else:
+        st.info("Consultation requise.")
+        st.link_button("📅 RDV Doctolib", "https://www.doctolib.fr")
+
+    if st.button("🔄 Nouvelle analyse"):
+        st.session_state.page = "home"
+        st.rerun()
